@@ -21,6 +21,13 @@ Testing in Django ensures that your app works as expected before pushing it to p
 * Help new contributors understand system expectations
 * Automate checks in CI/CD pipelines
 
+### 🧠 Example
+
+```bash
+# Example: Run automated tests before deployment
+pytest && git push heroku main
+```
+
 ---
 
 ## Django’s Built-in Testing Tools
@@ -32,6 +39,22 @@ Testing in Django ensures that your app works as expected before pushing it to p
 | `LiveServerTestCase`  | Runs with live HTTP server (for Selenium)         |
 | `TransactionTestCase` | Supports transaction rollback testing             |
 | `assert*` methods     | Assertion tools: `assertEqual`, `assertTrue`, etc |
+
+### ⚙️ Example
+
+```python
+from django.test import TestCase, Client, LiveServerTestCase
+
+class SimpleTest(TestCase):
+    def test_addition(self):
+        self.assertEqual(1 + 1, 2)
+
+class ClientTest(TestCase):
+    def test_homepage(self):
+        client = Client()
+        response = client.get('/')
+        self.assertEqual(response.status_code, 200)
+```
 
 ---
 
@@ -51,6 +74,20 @@ my_app/
 ```
 
 In `settings.py`, make sure `my_app` is listed in `INSTALLED_APPS`.
+
+### 📁 Example
+
+```python
+# my_app/tests/test_urls.py
+from django.test import SimpleTestCase
+from django.urls import reverse, resolve
+from my_app.views import product_list
+
+class TestUrls(SimpleTestCase):
+    def test_product_list_url_resolves(self):
+        url = reverse('product-list')
+        self.assertEqual(resolve(url).func, product_list)
+```
 
 ---
 
@@ -82,6 +119,15 @@ class ProductModelTest(TestCase):
         product = Product.objects.create(title='Watch', price=200)
         self.assertEqual(product.discounted_price(10), 180)
         self.assertEqual(product.discounted_price(0), 200)
+```
+
+### ✅ Additional Example
+
+```python
+class ProductValidationTest(TestCase):
+    def test_string_representation(self):
+        product = Product(title='Headphones', price=99.99)
+        self.assertEqual(str(product.title), 'Headphones')
 ```
 
 ---
@@ -130,6 +176,19 @@ class ProductViewTest(TestCase):
         self.assertContains(response, "Mouse")
 ```
 
+### 🌐 Additional Example
+
+```python
+class ProductDetailViewTest(TestCase):
+    def setUp(self):
+        self.product = Product.objects.create(title="Keyboard", price=100)
+
+    def test_product_detail_view(self):
+        response = self.client.get(f'/products/{self.product.id}/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Keyboard")
+```
+
 ---
 
 ## Running Tests
@@ -152,6 +211,13 @@ Enable verbose mode:
 python manage.py test -v 2
 ```
 
+### ▶️ Example
+
+```bash
+# Run only one test class
+python manage.py test my_app.tests.test_models.ProductModelTest
+```
+
 ---
 
 ## Common Assertions
@@ -164,6 +230,14 @@ python manage.py test -v 2
 | `assertContains(resp, s)`    | Check HTML contains string `s`   |
 | `assertRedirects(resp, url)` | Response was a redirect to `url` |
 
+### 🧩 Example
+
+```python
+def test_redirects_to_login(self):
+    response = self.client.get('/dashboard/')
+    self.assertRedirects(response, '/accounts/login/?next=/dashboard/')
+```
+
 ---
 
 ## Best Practices
@@ -173,6 +247,19 @@ python manage.py test -v 2
 * Prefer factories or fixtures over raw `create()` in complex cases
 * Write tests for both happy and failure paths
 * Keep each test focused and isolated
+
+### 💡 Example
+
+```python
+from django.test import TestCase
+from my_app.models import Product
+
+class ProductFailPathTest(TestCase):
+    def test_discount_with_invalid_percentage(self):
+        product = Product.objects.create(title='Phone', price=500)
+        with self.assertRaises(TypeError):
+            product.discounted_price('ten')
+```
 
 ---
 
@@ -185,3 +272,15 @@ python manage.py test -v 2
 | `reverse()`        | Resolve view names into actual URLs              |
 | `assertContains()` | Checks if HTML response includes a given text    |
 | `test_` prefix     | Django runs only functions prefixed with `test_` |
+
+### 🧪 Example
+
+```python
+from django.test import TestCase
+from django.urls import reverse
+
+class BasicExampleTest(TestCase):
+    def test_home_page_loads(self):
+        response = self.client.get(reverse('home'))
+        self.assertEqual(response.status_code, 200)
+```
