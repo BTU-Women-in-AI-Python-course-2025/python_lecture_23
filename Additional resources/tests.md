@@ -273,14 +273,3 @@ class ProductFailPathTest(TestCase):
 | `assertContains()` | Checks if HTML response includes a given text    |
 | `test_` prefix     | Django runs only functions prefixed with `test_` |
 
-### 🧪 Example
-
-```python
-from django.test import TestCase
-from django.urls import reverse
-
-class BasicExampleTest(TestCase):
-    def test_home_page_loads(self):
-        response = self.client.get(reverse('home'))
-        self.assertEqual(response.status_code, 200)
-```
