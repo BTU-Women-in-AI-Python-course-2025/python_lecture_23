@@ -140,65 +140,120 @@ class BlogPostModelTest(TestCase):
 
 ---
 
-## Writing Integration Tests (Views)
+## Writing Integration Tests (DRF ViewSets)
 
-Integration tests verify that **multiple parts** (models, views, templates) work together —
-for example, a view retrieving authors or blog posts.
+Integration tests for DRF verify that **API endpoints** work correctly with models, serializers, and permissions.
 
-### Example: View Integration Test
+We will use `rest_framework.test.APIClient` to simulate API requests.
 
-```python
-# blog/views.py
-from django.shortcuts import render
-from blog.models import BlogPost
+---
 
-def blog_post_list(request):
-    posts = BlogPost.objects.filter(active=True, published=True)
-    return render(request, 'blog/list.html', {'posts': posts})
-```
+### Example: BlogPost List and Detail API
 
 ```python
-# blog/urls.py
-from django.urls import path
-from blog.views import blog_post_list
-
-urlpatterns = [
-    path('blog/', blog_post_list, name='blog-post-list'),
-]
-```
-
-```python
-# blog/tests/test_views.py
+# blog/tests/test_api_views.py
 from django.test import TestCase
-from django.urls import reverse
-from blog.models import BlogPost
+from rest_framework.test import APIClient
+from rest_framework import status
+from blog.models import BlogPost, Author
 
-class BlogPostViewTest(TestCase):
+class BlogPostAPITest(TestCase):
     def setUp(self):
-        BlogPost.objects.create(title="Django Testing", text="Intro to testing", active=True, published=True)
-        BlogPost.objects.create(title="Unpublished Post", text="Hidden", active=True, published=False)
+        self.client = APIClient()
+        self.author = Author.objects.create(first_name="Mariam", last_name="Kipshidze")
+        self.post1 = BlogPost.objects.create(
+            title="Published Post", text="Content 1", active=True, published=True
+        )
+        self.post2 = BlogPost.objects.create(
+            title="Unpublished Post", text="Content 2", active=True, published=False
+        )
+        self.post1.authors.add(self.author)
 
     def test_list_published_posts(self):
-        response = self.client.get(reverse('blog-post-list'))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Django Testing")
-        self.assertNotContains(response, "Unpublished Post")
-```
+        response = self.client.get('/blog_post/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Only published posts should appear
+        titles = [item['title'] for item in response.data['results']]
+        self.assertIn("Published Post", titles)
+        self.assertNotIn("Unpublished Post", titles)
 
-### 🌐 Additional Example
-
-```python
-class BlogPostDetailViewTest(TestCase):
-    def setUp(self):
-        self.post = BlogPost.objects.create(title="Detail Test", text="Post content", active=True, published=True)
-
-    def test_blog_post_detail_view(self):
-        response = self.client.get(f'/blog/{self.post.id}/')
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Detail Test")
+    def test_retrieve_blog_post_detail(self):
+        response = self.client.get(f'/blog_post/{self.post1.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['title'], "Published Post")
+        self.assertEqual(response.data['authors'][0]['first_name'], "Mariam")
 ```
 
 ---
+
+### Example: Creating, Updating, and Deleting Posts
+
+```python
+class BlogPostCRUDTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.author = Author.objects.create(first_name="Ana", last_name="Smith")
+        self.post = BlogPost.objects.create(title="Old Title", text="Old content", active=True)
+
+    def test_create_blog_post(self):
+        data = {
+            "title": "New Post",
+            "text": "Some content",
+            "authors": [self.author.id],
+            "active": True,
+            "published": True
+        }
+        response = self.client.post('/blog_post_create/', data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(BlogPost.objects.count(), 2)
+        self.assertEqual(BlogPost.objects.last().title, "New Post")
+
+    def test_partial_update_blog_post(self):
+        data = {"title": "Updated Title"}
+        response = self.client.patch(f'/blog_post_update/{self.post.id}/', data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.post.refresh_from_db()
+        self.assertEqual(self.post.title, "Updated Title")
+
+    def test_delete_blog_post(self):
+        response = self.client.delete(f'/blog_post_delete/{self.post.id}/')
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.post.refresh_from_db()
+        self.assertTrue(self.post.deleted)
+```
+
+---
+
+### Example: Author List API
+
+```python
+class AuthorAPITest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.author1 = Author.objects.create(first_name="Mariam", last_name="Kipshidze")
+        self.author2 = Author.objects.create(first_name="Ana", last_name="Smith")
+
+    def test_list_authors(self):
+        response = self.client.get('/author/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        names = [item['first_name'] for item in response.data['results']]
+        self.assertIn("Mariam", names)
+        self.assertIn("Ana", names)
+```
+
+---
+
+### ✅ Notes
+
+* We use `APIClient` instead of Django `Client` because we are testing **DRF API endpoints**.
+* For list endpoints, `results` come from `pagination_class` (`BlogPostCursorPagination`).
+* These tests cover:
+
+  * Listing published posts
+  * Retrieving post detail
+  * Creating, updating, deleting posts
+  * Listing authors
+
 
 ## Running Tests
 
