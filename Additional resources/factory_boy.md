@@ -1,4 +1,4 @@
-# 🏭 factory_boy — Django Testing with a Product Model
+# factory_boy — Django Testing with a Product Model
 
 **factory_boy** is a library that helps you easily and reliably create test data.
 It’s perfect for Django applications — instead of manually setting up `Product` objects in every test, you define factories that can quickly generate them with realistic data.
