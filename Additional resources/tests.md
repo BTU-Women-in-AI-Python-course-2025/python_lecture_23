@@ -369,6 +369,7 @@ def test_redirects_to_login(self):
 # blog/tests/test_live_server.py
 from django.test import LiveServerTestCase
 from selenium import webdriver
+from selenium.webdriver.common.by import By
 from blog.models import BlogPost
 
 class BlogLiveServerTest(LiveServerTestCase):
@@ -391,8 +392,9 @@ class BlogLiveServerTest(LiveServerTestCase):
         )
 
     def test_blog_post_list_visible_in_browser(self):
-        self.browser.get(self.live_server_url + '/blog/')
-        body_text = self.browser.find_element("tag name", "body").text
+        # Navigate to the blog post list endpoint, not the API root
+        self.browser.get(self.live_server_url + '/blog/blog_post/')
+        body_text = self.browser.find_element(By.TAG_NAME, "body").text
         self.assertIn("Live Server Test", body_text)
 ```
 
