@@ -21,13 +21,6 @@ Testing in Django ensures that your app works as expected before pushing it to p
 * Help new contributors understand system expectations
 * Automate checks in CI/CD pipelines
 
-### 🧠 Example
-
-```bash
-# Example: Run automated tests before deployment
-pytest && git push heroku main
-```
-
 ---
 
 ## Django’s Built-in Testing Tools
