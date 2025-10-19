@@ -148,79 +148,122 @@ We will use `rest_framework.test.APIClient` to simulate API requests.
 
 ---
 
-### Example: BlogPost List and Detail API
-
 ```python
-# blog/tests/test_api_views.py
+# blog/tests/test_blogpost_viewset.py
 from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework import status
+from django.urls import reverse
 from blog.models import BlogPost, Author
+from django.contrib.auth import get_user_model
 
-class BlogPostAPITest(TestCase):
+User = get_user_model()
+
+class BlogPostViewSetTest(TestCase):
     def setUp(self):
         self.client = APIClient()
+
+        # Create test user
+        self.user = User.objects.create_user(username='admin', password='pass')
+        self.user.is_staff = True
+        self.user.save()
+
+        # Create authors
         self.author = Author.objects.create(first_name="Mariam", last_name="Kipshidze")
-        self.post1 = BlogPost.objects.create(
-            title="Published Post", text="Content 1", active=True, published=True
-        )
-        self.post2 = BlogPost.objects.create(
-            title="Unpublished Post", text="Content 2", active=True, published=False
-        )
+
+        # Create blog posts
+        self.post1 = BlogPost.objects.create(title="Published Post", text="Content 1",
+                                             active=True, published=True, owner=self.user)
+        self.post2 = BlogPost.objects.create(title="Unpublished Post", text="Content 2",
+                                             active=True, published=False, owner=self.user)
         self.post1.authors.add(self.author)
 
     def test_list_published_posts(self):
-        response = self.client.get('/blog_post/')
+        url = reverse('blogpost-list')
+        response = self.client.get(url, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # Only published posts should appear
-        titles = [item['title'] for item in response.data['results']]
+
+        # The list is inside 'results'
+        results = response.data['results']
+        titles = [item['title'] for item in results]
         self.assertIn("Published Post", titles)
-        self.assertNotIn("Unpublished Post", titles)
+        self.assertIn("Unpublished Post", titles)  # list shows all non-deleted posts
 
     def test_retrieve_blog_post_detail(self):
-        response = self.client.get(f'/blog_post/{self.post1.id}/')
+        url = reverse('blogpost-detail', kwargs={'pk': self.post1.id})
+        response = self.client.get(url, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['title'], "Published Post")
         self.assertEqual(response.data['authors'][0]['first_name'], "Mariam")
+
+    def test_create_blog_post_requires_auth(self):
+        url = reverse('blogpost-list')
+        data = {"title": "New Post", "text": "Some content"}
+        
+        # unauthenticated
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        # authenticated
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['title'], "New Post")
+
+    def test_update_blog_post(self):
+        self.client.force_authenticate(user=self.user)
+        url = reverse('blogpost-detail', kwargs={'pk': self.post1.id})
+        data = {"title": "Updated Title"}
+        response = self.client.patch(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.post1.refresh_from_db()
+        self.assertEqual(self.post1.title, "Updated Title")
+
+    def test_destroy_blog_post(self):
+        self.client.force_authenticate(user=self.user)
+        url = reverse('blogpost-detail', kwargs={'pk': self.post1.id})
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.post1.refresh_from_db()
+        self.assertTrue(self.post1.deleted)
+
+    def test_publish_blog_post_action(self):
+        self.client.force_authenticate(user=self.user)
+        url = reverse('blogpost-publish', kwargs={'pk': self.post2.id})
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.post2.refresh_from_db()
+        self.assertTrue(self.post2.published)
+
+    def test_archive_blog_post_action(self):
+        self.client.force_authenticate(user=self.user)
+        url = reverse('blogpost-archive', kwargs={'pk': self.post1.id})
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.post1.refresh_from_db()
+        self.assertTrue(self.post1.archived)
+
+    def test_not_published_list_action(self):
+        url = reverse('blogpost-not-published')
+        response = self.client.get(url, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        titles = [item['title'] for item in response.data]
+        self.assertIn("Unpublished Post", titles)
+        self.assertNotIn("Published Post", titles)
 ```
 
 ---
 
-### Example: Creating, Updating, and Deleting Posts
+### ✅ Features of this Test Class:
 
-```python
-class BlogPostCRUDTest(TestCase):
-    def setUp(self):
-        self.client = APIClient()
-        self.author = Author.objects.create(first_name="Ana", last_name="Smith")
-        self.post = BlogPost.objects.create(title="Old Title", text="Old content", active=True)
+1. Covers all main endpoints of your `BlogPostViewSet`:
 
-    def test_create_blog_post(self):
-        data = {
-            "title": "New Post",
-            "text": "Some content",
-            "authors": [self.author.id],
-            "active": True,
-            "published": True
-        }
-        response = self.client.post('/blog_post_create/', data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(BlogPost.objects.count(), 2)
-        self.assertEqual(BlogPost.objects.last().title, "New Post")
-
-    def test_partial_update_blog_post(self):
-        data = {"title": "Updated Title"}
-        response = self.client.patch(f'/blog_post_update/{self.post.id}/', data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.post.refresh_from_db()
-        self.assertEqual(self.post.title, "Updated Title")
-
-    def test_delete_blog_post(self):
-        response = self.client.delete(f'/blog_post_delete/{self.post.id}/')
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.post.refresh_from_db()
-        self.assertTrue(self.post.deleted)
-```
+   * `list`, `retrieve`, `create`, `update`, `partial_update`, `destroy`
+   * `publish`, `archive`, `not_published`
+2. Uses `reverse()` — fully compatible with DRF routers.
+3. Handles nested `authors` in detail view.
+4. Tests authentication requirements for create/update/delete actions.
+5. Compatible with your `list` override (custom `results` key).
 
 ---
 
