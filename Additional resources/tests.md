@@ -247,7 +247,81 @@ def test_redirects_to_login(self):
     self.assertRedirects(response, '/accounts/login/?next=/admin/blog/')
 ```
 
+## 🌐 LiveServerTestCase Example
+
+`LiveServerTestCase` runs a **live Django server** for browser-based or HTTP testing. Useful for Selenium tests or any test that needs a real HTTP request.
+
+```python
+# blog/tests/test_live_server.py
+from django.test import LiveServerTestCase
+from selenium import webdriver
+from blog.models import BlogPost
+
+class BlogLiveServerTest(LiveServerTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.browser = webdriver.Chrome()  # Requires ChromeDriver installed
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.quit()
+        super().tearDownClass()
+
+    def setUp(self):
+        self.post = BlogPost.objects.create(
+            title="Live Server Test",
+            text="Testing with live server",
+            active=True,
+            published=True
+        )
+
+    def test_blog_post_list_visible_in_browser(self):
+        self.browser.get(self.live_server_url + '/blog/')
+        body_text = self.browser.find_element("tag name", "body").text
+        self.assertIn("Live Server Test", body_text)
+```
+
+✅ **What this does:**
+
+* Starts a temporary live server
+* Opens the blog list page in a real browser
+* Checks that published posts are visible
+
 ---
+
+## ⚡ TransactionTestCase Example
+
+`TransactionTestCase` allows testing **manual DB commits and rollbacks**. Useful if your code uses `transaction.atomic()` or other transactional behavior.
+
+```python
+# blog/tests/test_transaction.py
+from django.test import TransactionTestCase
+from django.db import transaction
+from blog.models import BlogPost
+
+class BlogTransactionTest(TransactionTestCase):
+    def test_manual_transaction_rollback(self):
+        try:
+            with transaction.atomic():
+                BlogPost.objects.create(
+                    title="Temp Post",
+                    text="This should rollback",
+                    active=True,
+                    published=True
+                )
+                raise ValueError("Force rollback")
+        except ValueError:
+            pass
+
+        # The post should not exist because the transaction was rolled back
+        self.assertEqual(BlogPost.objects.filter(title="Temp Post").count(), 0)
+```
+
+✅ **What this does:**
+
+* Tests that a manual transaction is rolled back correctly
+* Cannot be done with regular `TestCase` because it wraps tests in automatic transactions
 
 ## Best Practices
 
