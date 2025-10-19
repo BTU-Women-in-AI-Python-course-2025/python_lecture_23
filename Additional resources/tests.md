@@ -36,7 +36,7 @@ Testing in Django ensures that your app works as expected before pushing it to p
 ### ⚙️ Example
 
 ```python
-from django.test import TestCase, Client, LiveServerTestCase
+from django.test import TestCase, Client
 
 class SimpleTest(TestCase):
     def test_addition(self):
@@ -53,140 +53,156 @@ class ClientTest(TestCase):
 
 ## Test Structure & Setup
 
-You can keep all tests in a central file or split them:
+You can keep all tests in a central file or split them by function:
 
 ```
-my_app/
+blog/
 ├── models.py
 ├── views.py
 ├── tests/
 │   ├── __init__.py
 │   ├── test_models.py
 │   ├── test_views.py
-│   └── test_forms.py
+│   └── test_urls.py
 ```
 
-In `settings.py`, make sure `my_app` is listed in `INSTALLED_APPS`.
+In `settings.py`, make sure `blog` is listed in `INSTALLED_APPS`.
 
 ### 📁 Example
 
 ```python
-# my_app/tests/test_urls.py
+# blog/tests/test_urls.py
 from django.test import SimpleTestCase
 from django.urls import reverse, resolve
-from my_app.views import product_list
+from blog.views import blog_post_list
 
 class TestUrls(SimpleTestCase):
-    def test_product_list_url_resolves(self):
-        url = reverse('product-list')
-        self.assertEqual(resolve(url).func, product_list)
+    def test_blog_post_list_url_resolves(self):
+        url = reverse('blog-post-list')
+        self.assertEqual(resolve(url).func, blog_post_list)
 ```
 
 ---
 
 ## Writing Unit Tests
 
-Unit tests target **individual components**, like model methods or utility functions.
+Unit tests target **individual components**, such as model methods or computed properties.
 
 ### Example: Model Unit Test
 
 ```python
-# models.py
+# blog/models.py
+from datetime import date
 from django.db import models
 
-class Product(models.Model):
-    title = models.CharField(max_length=100)
-    price = models.DecimalField(max_digits=6, decimal_places=2)
+class Author(models.Model):
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    birth_date = models.DateField(null=True)
 
-    def discounted_price(self, percentage):
-        return self.price - (self.price * percentage / 100)
+    @property
+    def age(self) -> int:
+        today = date.today()
+        return today.year - self.birth_date.year - (
+            (today.month, today.day) < (self.birth_date.month, self.birth_date.day)
+        )
+
+    def __str__(self):
+        return self.first_name + " " + self.last_name
 ```
 
 ```python
-# tests/test_models.py
+# blog/tests/test_models.py
+from datetime import date
 from django.test import TestCase
-from .models import Product
+from blog.models import Author, BlogPost
 
-class ProductModelTest(TestCase):
-    def test_discounted_price(self):
-        product = Product.objects.create(title='Watch', price=200)
-        self.assertEqual(product.discounted_price(10), 180)
-        self.assertEqual(product.discounted_price(0), 200)
-```
+class AuthorModelTest(TestCase):
+    def test_author_age_property(self):
+        author = Author.objects.create(
+            first_name='Mariam',
+            last_name='Kipshidze',
+            birth_date=date(2000, 10, 10)
+        )
+        self.assertIsInstance(author.age, int)
+        self.assertGreater(author.age, 0)
 
-### ✅ Additional Example
-
-```python
-class ProductValidationTest(TestCase):
     def test_string_representation(self):
-        product = Product(title='Headphones', price=99.99)
-        self.assertEqual(str(product.title), 'Headphones')
+        author = Author(first_name='Ana', last_name='Smith')
+        self.assertEqual(str(author), 'Ana Smith')
+
+
+class BlogPostModelTest(TestCase):
+    def test_blogpost_str_method(self):
+        post = BlogPost(title='My First Post', text='Hello world!')
+        self.assertEqual(str(post), 'My First Post')
 ```
 
 ---
 
 ## Writing Integration Tests (Views)
 
-Integration tests verify that **multiple parts** work together — like a view querying the DB and returning a response.
+Integration tests verify that **multiple parts** (models, views, templates) work together —
+for example, a view retrieving authors or blog posts.
 
 ### Example: View Integration Test
 
 ```python
-# views.py
+# blog/views.py
 from django.shortcuts import render
-from .models import Product
+from blog.models import BlogPost
 
-def product_list(request):
-    products = Product.objects.all()
-    return render(request, 'products/list.html', {'products': products})
+def blog_post_list(request):
+    posts = BlogPost.objects.filter(active=True, published=True)
+    return render(request, 'blog/list.html', {'posts': posts})
 ```
 
 ```python
-# urls.py
+# blog/urls.py
 from django.urls import path
-from .views import product_list
+from blog.views import blog_post_list
 
 urlpatterns = [
-    path('products/', product_list, name='product-list'),
+    path('blog/', blog_post_list, name='blog-post-list'),
 ]
 ```
 
 ```python
-# tests/test_views.py
+# blog/tests/test_views.py
 from django.test import TestCase
 from django.urls import reverse
-from .models import Product
+from blog.models import BlogPost
 
-class ProductViewTest(TestCase):
+class BlogPostViewTest(TestCase):
     def setUp(self):
-        Product.objects.create(title="Laptop", price=1500)
-        Product.objects.create(title="Mouse", price=50)
+        BlogPost.objects.create(title="Django Testing", text="Intro to testing", active=True, published=True)
+        BlogPost.objects.create(title="Unpublished Post", text="Hidden", active=True, published=False)
 
-    def test_list_products(self):
-        response = self.client.get(reverse('product-list'))
+    def test_list_published_posts(self):
+        response = self.client.get(reverse('blog-post-list'))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Laptop")
-        self.assertContains(response, "Mouse")
+        self.assertContains(response, "Django Testing")
+        self.assertNotContains(response, "Unpublished Post")
 ```
 
 ### 🌐 Additional Example
 
 ```python
-class ProductDetailViewTest(TestCase):
+class BlogPostDetailViewTest(TestCase):
     def setUp(self):
-        self.product = Product.objects.create(title="Keyboard", price=100)
+        self.post = BlogPost.objects.create(title="Detail Test", text="Post content", active=True, published=True)
 
-    def test_product_detail_view(self):
-        response = self.client.get(f'/products/{self.product.id}/')
+    def test_blog_post_detail_view(self):
+        response = self.client.get(f'/blog/{self.post.id}/')
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Keyboard")
+        self.assertContains(response, "Detail Test")
 ```
 
 ---
 
 ## Running Tests
 
-Run all project tests:
+Run all tests in your Django project:
 
 ```bash
 python manage.py test
@@ -195,10 +211,10 @@ python manage.py test
 Run tests from a specific file:
 
 ```bash
-python manage.py test my_app.tests.test_models
+python manage.py test blog.tests.test_models
 ```
 
-Enable verbose mode:
+Enable verbose mode for more details:
 
 ```bash
 python manage.py test -v 2
@@ -208,61 +224,64 @@ python manage.py test -v 2
 
 ```bash
 # Run only one test class
-python manage.py test my_app.tests.test_models.ProductModelTest
+python manage.py test blog.tests.test_models.AuthorModelTest
 ```
 
 ---
 
 ## Common Assertions
 
-| Assertion                    | Description                      |
-| ---------------------------- | -------------------------------- |
-| `assertEqual(a, b)`          | a == b                           |
-| `assertTrue(x)`              | bool(x) is True                  |
-| `assertIn(a, b)`             | a in b                           |
-| `assertContains(resp, s)`    | Check HTML contains string `s`   |
-| `assertRedirects(resp, url)` | Response was a redirect to `url` |
+| Assertion                    | Description                       |
+| ---------------------------- | --------------------------------- |
+| `assertEqual(a, b)`          | a == b                            |
+| `assertTrue(x)`              | bool(x) is True                   |
+| `assertIn(a, b)`             | a in b                            |
+| `assertContains(resp, s)`    | Check if HTML contains string `s` |
+| `assertRedirects(resp, url)` | Response was a redirect to `url`  |
 
 ### 🧩 Example
 
 ```python
 def test_redirects_to_login(self):
-    response = self.client.get('/dashboard/')
-    self.assertRedirects(response, '/accounts/login/?next=/dashboard/')
+    response = self.client.get('/admin/blog/')
+    self.assertRedirects(response, '/accounts/login/?next=/admin/blog/')
 ```
 
 ---
 
 ## Best Practices
 
-* Use `setUp()` for test data creation
-* Separate tests by functionality (models, views, forms, serializers)
-* Prefer factories or fixtures over raw `create()` in complex cases
-* Write tests for both happy and failure paths
-* Keep each test focused and isolated
+* Use `setUp()` for creating test data
+* Separate tests by functionality (models, views, urls)
+* Prefer **factories or fixtures** over raw `.create()` for large setups
+* Test both valid and invalid scenarios
+* Keep each test focused and independent
 
 ### 💡 Example
 
 ```python
 from django.test import TestCase
-from my_app.models import Product
+from blog.models import BlogPost
 
-class ProductFailPathTest(TestCase):
-    def test_discount_with_invalid_percentage(self):
-        product = Product.objects.create(title='Phone', price=500)
-        with self.assertRaises(TypeError):
-            product.discounted_price('ten')
+class BlogPostEdgeCaseTest(TestCase):
+    def test_create_post_without_title_raises_error(self):
+        with self.assertRaises(ValueError):
+            BlogPost.objects.create(title=None, text='No title here')
 ```
 
 ---
 
 ## Summary Table
 
-| Feature            | Description                                      |
-| ------------------ | ------------------------------------------------ |
-| `TestCase`         | Sets up/tears down a test DB per test case       |
-| `Client.get/post`  | Simulate HTTP requests without actual server     |
-| `reverse()`        | Resolve view names into actual URLs              |
-| `assertContains()` | Checks if HTML response includes a given text    |
-| `test_` prefix     | Django runs only functions prefixed with `test_` |
+| Feature            | Description                                     |
+| ------------------ | ----------------------------------------------- |
+| `TestCase`         | Sets up and tears down a test DB per test class |
+| `Client.get/post`  | Simulates HTTP requests without a real server   |
+| `reverse()`        | Resolves view names into URLs                   |
+| `assertContains()` | Checks if response includes given text          |
+| `test_` prefix     | Django runs only methods starting with `test_`  |
 
+---
+
+✅ **In summary:**
+This documentation now fully demonstrates Django testing using your **Blog models** — `Author`, `BlogPost`, and related objects — with realistic unit and integration examples you can use in your own app.
