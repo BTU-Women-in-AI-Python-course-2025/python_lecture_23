@@ -26,7 +26,7 @@ SECRET_KEY = 'django-insecure-$v#--8#$(nl8m0*be*-3cb(a8japu_7j7!km24q)u6jnsyj$6!
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'django_filters',
     'django_celery_beat',
+    'drf_yasg',
 
     'blog',
     'user'
