@@ -3,6 +3,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from blog.factories import BlogPostFactory, AuthorFactory
 from blog.models import BlogPost, Author
 from user.models import CustomUser
 
@@ -116,3 +117,64 @@ class BlogPostViewSetTest(TestCase):
         titles = [item['title'] for item in response.data]
         self.assertIn("Unpublished Post", titles)
         self.assertNotIn("Published Post", titles)
+
+
+class BlogPostFactoryTests(TestCase):
+    def test_blog_post_creation(self):
+        """Basic creation test — ensure factory creates an active post."""
+        post = BlogPostFactory()
+        self.assertTrue(post.active)
+        self.assertIsInstance(post, BlogPost)
+        self.assertIsNotNone(post.title)
+        self.assertIsNotNone(post.text)
+
+    def test_blog_post_owner_created(self):
+        """Ensure owner (CustomUser) is automatically created."""
+        post = BlogPostFactory()
+        self.assertIsInstance(post.owner, CustomUser)
+        self.assertTrue(hasattr(post.owner, "email"))
+
+    def test_blog_post_with_authors(self):
+        """Ensure author(s) are correctly assigned."""
+        author1 = AuthorFactory()
+        author2 = AuthorFactory()
+        post = BlogPostFactory(authors=[author1, author2])
+
+        self.assertEqual(post.authors.count(), 2)
+        self.assertIn(author1, post.authors.all())
+        self.assertIn(author2, post.authors.all())
+
+    def test_blog_post_auto_creates_author_if_none_given(self):
+        """Factory should create one author automatically if not provided."""
+        post = BlogPostFactory()
+        self.assertGreater(post.authors.count(), 0)
+        self.assertIsInstance(post.authors.first(), Author)
+
+    def test_blog_post_document_field(self):
+        """Ensure document file is correctly created."""
+        post = BlogPostFactory()
+        self.assertTrue(post.document.name.startswith("blog_document/blog_doc_"))
+        self.assertTrue(post.document.name.startswith("blog_document/blog_doc_"))
+        self.assertTrue(post.document.name.endswith(".txt"))
+        self.assertTrue(post.document.size > 0)
+
+    def test_blog_post_category_in_range(self):
+        """Category should be within expected random choices."""
+        post = BlogPostFactory()
+        self.assertIn(post.category, [1, 2, 3])
+
+    def test_blog_post_order_is_sequential(self):
+        """Order should increase with each new factory instance."""
+        p1 = BlogPostFactory()
+        p2 = BlogPostFactory()
+        self.assertTrue(p2.order > p1.order)
+
+    def test_blog_post_website_field(self):
+        """Website field should contain a valid-looking URL."""
+        post = BlogPostFactory()
+        self.assertTrue(post.website.startswith("http"))
+
+    def test_blog_post_published_flag(self):
+        """Published field should be a boolean."""
+        post = BlogPostFactory()
+        self.assertIsInstance(post.published, bool)
