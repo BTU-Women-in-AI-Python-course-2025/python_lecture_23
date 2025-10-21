@@ -133,6 +133,12 @@ class BlogPostViewSet(ModelViewSet):
         serializer = self.get_serializer(archived_posts, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    @action(detail=False, methods=['get'])
+    def published_posts(self, request):
+        published_posts = BlogPost.objects.filter(published=True)
+        serializer = self.get_serializer(published_posts, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
     @action(detail=False, methods=['post'])
     def delete_inactive_blog_posts(self, request):
         delete_inactive_blog_posts.delay()
