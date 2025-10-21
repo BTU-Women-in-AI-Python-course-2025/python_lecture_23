@@ -1,10 +1,15 @@
+from unittest.mock import MagicMock
+
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from blog.factories import BlogPostFactory, CustomUserFactory, AuthorFactory, BlogPostImageFactory
 from user.models import CustomUser
-from blog.models import BlogPost, Author
+from blog.models import BlogPost, Author, BlogPostImage
 
 
 class BlogPostModelTest(TestCase):
@@ -127,3 +132,71 @@ class BlogPostViewSetTest(TestCase):
 
         self.assertNotIn("Unpublished Post", titles)
         self.assertIn("Published Post", titles)
+
+
+class BlogPostFactoryModelTest(TestCase):
+    def setUp(self):
+        self.owner = CustomUserFactory()
+        self.author = AuthorFactory()
+        self.post = BlogPostFactory(owner=self.owner)
+        self.post.authors.add(self.author)
+
+    def test_blogpost_has_valid_owner(self):
+        """BlogPost should have an associated owner."""
+        self.assertIsNotNone(self.post.owner)
+        self.assertEqual(self.post.owner.__class__.__name__, "CustomUser")
+
+    def test_blogpost_has_authors(self):
+        """BlogPost should have at least one author."""
+        self.assertTrue(self.post.authors.exists())
+        self.assertIn(self.author, self.post.authors.all())
+
+    def test_blogpost_created_at_is_recent(self):
+        """created_at timestamp should be near current time."""
+        now = timezone.now()
+        delta = now - self.post.created_at
+        self.assertLess(delta.total_seconds(), 5)  # created within last 5s
+
+    def test_blogpost_can_be_published(self):
+        """A BlogPost can be marked as published."""
+        self.post.published = True
+        self.post.save()
+        updated = BlogPost.objects.get(id=self.post.id)
+        self.assertTrue(updated.published)
+
+    def test_blogpost_update_timestamp_changes(self):
+        """updated_at should change when post is saved."""
+        old_updated = self.post.updated_at
+        self.post.text = "Updated text"
+        self.post.save()
+        self.assertGreater(self.post.updated_at, old_updated)
+
+    def test_blogpost_category_field_is_valid_choice(self):
+        """Category should be within defined choices."""
+        valid_categories = [c[0] for c in BlogPost._meta.get_field("category").choices]
+        self.assertIn(self.post.category, valid_categories)
+
+    def test_blogpost_default_order_is_zero(self):
+        """Default order field should be 0 unless overridden."""
+        post = BlogPostFactory(order=0)
+        self.assertEqual(post.order, 0)
+
+    def test_blogpost_unique_constraint_validation(self):
+        """Model validation should raise ValidationError for duplicate (title, text)."""
+        BlogPostFactory(title="Unique Title", text="Unique Text")
+        duplicate = BlogPostFactory.build(title="Unique Title", text="Unique Text")  # build = not saved
+        with self.assertRaises(ValidationError):
+            duplicate.full_clean()
+
+    def test_blogpost_get_images_returns_queryset(self):
+        """get_images() should return all related BlogPostImage objects."""
+        # create a few images linked to this post
+        img1 = BlogPostImageFactory(blog_post=self.post)
+        img2 = BlogPostImageFactory(blog_post=self.post)
+
+        images = self.post.get_images()
+
+        # Assertions
+        self.assertEqual(list(images), [img1, img2])
+        self.assertEqual(images.count(), 2)
+        self.assertTrue(all(isinstance(img, BlogPostImage) for img in images))

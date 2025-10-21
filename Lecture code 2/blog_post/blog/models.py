@@ -38,7 +38,6 @@ class BlogPostAuthorThroughTable(models.Model):
         return self.blog_post.title
 
 
-
 class BlogPost(models.Model):
     owner = models.ForeignKey(
         to='user.CustomUser',
