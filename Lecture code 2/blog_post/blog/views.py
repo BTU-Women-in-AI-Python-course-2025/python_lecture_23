@@ -1,5 +1,6 @@
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.db import transaction
 
 from rest_framework import mixins, viewsets, status
 from rest_framework.decorators import action
@@ -112,16 +113,18 @@ class BlogPostViewSet(ModelViewSet):
 
     @action(detail=True, methods=['post'])  # for detail route
     def publish(self, request, pk=None):
-        obj = self.get_object()
-        obj.published = True
-        obj.save(update_fields=['published'])
+        with transaction.atomic():
+            obj = self.get_object()
+            obj.published = True
+            obj.save(update_fields=['published'])
         return Response({'status': 'published'}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'])  # for detail route
     def archive(self, request, pk=None):
-        obj = self.get_object()
-        obj.archived = True
-        obj.save(update_fields=['archived'])
+        with transaction.atomic():
+            obj = self.get_object()
+            obj.archived = True
+            obj.save(update_fields=['archived'])
         return Response({'status': 'archived'}, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['get'])
